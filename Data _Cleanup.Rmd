@@ -1,0 +1,559 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.0'
+      jupytext_version: 1.0.5
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+import pandas as pd
+import numpy as np
+from pandas import Series, DataFrame
+import csv
+import requests
+from config import api_key_omdb2
+import time
+import gzip
+import shutil
+```
+
+# First API call and cleanup
+
+```{python}
+#Load in csv with IMBD ids found on Kaggle
+#(https://www.kaggle.com/rounakbanik/the-movies-dataset#links.csv)
+omdb_link_file = pd.read_csv('.\\raw_data\\links.csv')
+omdb_link_data = pd.DataFrame(omdb_link_file)
+
+#Add leading zeros and tt to the IMBD id column
+omdb_link_data['imdbId'] = omdb_link_data['imdbId'].apply(lambda x: 'tt{0:0>7}'.format(x))
+
+#Convert omdb column to list
+omdb_id_list = omdb_link_data['imdbId'].tolist()
+
+len(omdb_id_list)
+```
+
+```{python}
+#Set up for call
+url = "http://private.omdbapi.com/"
+params = {"apikey":api_key_omdb2}
+not_found = []
+
+#Set up loop
+counter = 0
+start_time = time.time()
+for x in range (len(omdb_id_list)):
+    
+    #movie paramater is selected from list
+    movieid = omdb_id_list[x]
+    params["i"] = movieid
+    
+    response = requests.get(url,params=params).json()
+    try:
+        # assemble url and make API request
+        omdb_link_data.loc[x,'Title'] = response.get("Title",'')
+        omdb_link_data.loc[x,'Year'] = response.get("Year",'')
+        omdb_link_data.loc[x,'Released'] = response.get("Released",'')
+        omdb_link_data.loc[x,'Runtime'] = response.get("Runtime",'')
+        omdb_link_data.loc[x,'Genre'] = response.get("Genre",'')
+        omdb_link_data.loc[x,'Director'] = response.get("Director",'')
+        omdb_link_data.loc[x,'Writer'] = response.get("Writer",'')
+        omdb_link_data.loc[x,'Actors'] = response.get("Actors",'')
+        omdb_link_data.loc[x,'Plot'] = response.get("Plot",'')
+        omdb_link_data.loc[x,'Country'] = response.get("Country",'')
+        omdb_link_data.loc[x,'Awards'] = response.get("Awards",'')
+        omdb_link_data.loc[x,'RT_Ratings'] = response["Ratings"][1].get("Value",'')
+        omdb_link_data.loc[x,'Metascore'] = response.get("Metascore",'')
+        omdb_link_data.loc[x,'imdbRating'] = response.get("imdbRating",'')
+        omdb_link_data.loc[x,'imdbVotes'] = response.get("imdbVotes",'')
+        omdb_link_data.loc[x,'imdbID'] = response.get("imdbID",'')
+        omdb_link_data.loc[x,'Type'] = response.get("Type",'')
+        omdb_link_data.loc[x,'BoxOffice'] = response.get("BoxOffice",'')
+        omdb_link_data.loc[x,'Production'] = response.get("Production",'')
+        
+    except (KeyError, ValueError) as e:
+        print(f"skipping {movieid}")
+        not_found.append(movieid)
+        
+    #If there is no RT_rating
+    except IndexError:
+        omdb_link_data.loc[x,'Title'] = response.get("Title",'')
+        omdb_link_data.loc[x,'Year'] = response.get("Year",'')
+        omdb_link_data.loc[x,'Released'] = response.get("Released",'')
+        omdb_link_data.loc[x,'Runtime'] = response.get("Runtime",'')
+        omdb_link_data.loc[x,'Genre'] = response.get("Genre",'')
+        omdb_link_data.loc[x,'Director'] = response.get("Director",'')
+        omdb_link_data.loc[x,'Writer'] = response.get("Writer",'')
+        omdb_link_data.loc[x,'Actors'] = response.get("Actors",'')
+        omdb_link_data.loc[x,'Plot'] = response.get("Plot",'')
+        omdb_link_data.loc[x,'Country'] = response.get("Country",'')
+        omdb_link_data.loc[x,'Awards'] = response.get("Awards",'')
+        omdb_link_data.loc[x,'Metascore'] = response.get("Metascore",'')
+        omdb_link_data.loc[x,'imdbRating'] = response.get("imdbRating",'')
+        omdb_link_data.loc[x,'imdbVotes'] = response.get("imdbVotes",'')
+        omdb_link_data.loc[x,'imdbID'] = response.get("imdbID",'')
+        omdb_link_data.loc[x,'Type'] = response.get("Type",'')
+        omdb_link_data.loc[x,'BoxOffice'] = response.get("BoxOffice",'')
+        omdb_link_data.loc[x,'Production'] = response.get("Production",'')
+        
+    #Counter added so API call is not redone        
+    counter+=1        
+    if counter == 10:
+        break
+end_time = time.time()
+elapsed = end_time - start_time
+print(f"{elapsed} seconds elapsed, {len(not_found)} record(s) not found")
+
+#omdb_link_data.to_csv('.\\raw_data\\raw_omdb.csv', encoding="utf-8", index=False)
+```
+
+```{python}
+omdb_file = pd.read_csv('.\\raw_data\\raw_omdb.csv')
+omdb_data = pd.DataFrame(omdb_file)
+```
+
+```{python}
+omdb_data.info()
+```
+
+```{python}
+#Function to correct problems with RT_ratings series
+#Split as string on unwanted character, return value before character
+def ratings_parse(x):
+    if '%' in x:
+        return x.split('%')[0]
+    elif '/' in x:
+        return x.split('/')[0]
+    elif '–' in x:
+        return x.split('–')[0]
+    elif x is None:
+        return None
+```
+
+```{python}
+#Filter out any series or episode
+omdb_movie = omdb_data[omdb_data["Type"]=='movie']
+```
+
+```{python}
+#Filter out titles that contain #DUPE#
+omdb_movies = omdb_movie[omdb_movie.Title != '#DUPE#']
+```
+
+```{python}
+#Retain only needed column for movie analysis
+mod_omdb_movie_df = omdb_movies[['Title','Year','Genre','Country','RT_Ratings','Metascore','imdbRating','imdbVotes','Type','Production']]
+```
+
+```{python}
+#Filter out movies from before 1970
+mod_omdb_movie_df= mod_omdb_movie_df[mod_omdb_movie_df["Year"] >= '1970']
+```
+
+```{python}
+#Prepare for applying function
+mod_omdb_movie_rt_ratings= mod_omdb_movie_df[mod_omdb_movie_df["RT_Ratings"].notnull()]
+```
+
+```{python}
+#Normalize Rotten Tomatoes ratings
+mod_omdb_movie_rt_ratings["RT_Ratings2"] = mod_omdb_movie_rt_ratings["RT_Ratings"].apply(ratings_parse)
+```
+
+```{python}
+#Normalize imdb Ratings
+mod_omdb_movie_rt_ratings["imdbRating2"] = mod_omdb_movie_rt_ratings["imdbRating"].multiply(10)
+```
+
+```{python}
+#Save as movies CSV
+mod_omdb_movie_rt_ratings.to_csv('.\\cleaned_data\\omdb_movies_cleaned.csv', encoding="utf-8", index=False)
+```
+
+# Second API call and cleanup
+
+```{python}
+#https://www.imdb.com/interfaces/
+#Unzip files and save as CSV
+with gzip.open('.\\raw_data\\title.akas.tsv.gz', 'rb') as f_in:
+    with open('.\\raw_data\\title.csv', 'wb') as f_out:
+        shutil.copyfileobj(f_in, f_out)
+        
+with gzip.open('.\\raw_data\\title.basics.tsv.gz', 'rb') as f_in:
+    with open('.\\raw_data\\titlebasics.csv', 'wb') as f_out:
+        shutil.copyfileobj(f_in, f_out)
+        
+with gzip.open('.\\raw_data\\title.ratings.tsv.gz', 'rb') as f_in:
+    with open('.\\raw_data\\titleratings.csv', 'wb') as f_out:
+        shutil.copyfileobj(f_in, f_out)
+```
+
+```{python}
+#Make list of ids for tv titles with release year since 1970 and movies released in 2018
+tvtitles = []
+movietitles2018 = []
+years = ['1970','1971','1972','1973','1974','1975','1976','1977','1978','1979',\
+         '1980','1981','1982','1983','1984','1985','1986','1987','1988','1989',\
+         '1990','1991','1992','1993','1994','1995','1996','1997','1998','1999',\
+         '2000','2001','2002','2003','2004','2005','2006','2007','2008','2009',\
+         '2010','2011','2012','2013','2014','2015','2016','2017','2018']
+
+with open('.\\raw_data\\titlebasics.csv',newline='',encoding='utf8',errors='ignore') as f:
+    data = csv.reader(f, delimiter='\t')
+    csv_header = next(data)
+    
+    #This retrieves IDs for all tv Series and movies from 2018
+    for row in data:
+        if row[1] == 'tvSeries' and row[5] in years:
+            tvtitles.append(row[0])
+        if row[1] == 'movie' and row[5] == '2018':
+            movietitles2018.append(row[0])
+```
+
+```{python}
+len(tvtitles)
+```
+
+```{python}
+len(movietitles2018)
+```
+
+```{python}
+#Retrieve number of votes to concatenate with above retrieved and narrow down lists before API call
+dfm = []
+dft = []
+
+with open('.\\raw_data\\titleratings.csv',newline='',encoding='utf8',errors='ignore') as f:
+    data = csv.reader(f, delimiter='\t')
+    csv_header = next(data)
+
+    for row in data:
+        if row[0] in movietitles2018:
+            dfm.append((row[0], row[2]))
+            
+        if row[0] in tvtitles:
+            dft.append((row[0], row[2]))
+```
+
+```{python}
+#Make dataframes from retrieved data
+movie_df = DataFrame(dfm)
+movie_df.columns = ['ID','Votes']
+
+tv_df = DataFrame(dft)
+tv_df.columns = ['ID','Votes']
+
+movie_df.to_csv('.\\raw_data\\movie_2018id.csv', encoding="utf-8", index=False)
+tv_df.to_csv('.\\raw_data\\tvseriesid.csv', encoding="utf-8", index=False)
+```
+
+```{python}
+movie_file = pd.read_csv('.\\raw_data\\movie_2018id.csv')
+movie_df = DataFrame(movie_file)
+
+#Filter out movies with less than 500 votes
+movie_df['Votes'] = movie_df['Votes'].astype('int64')
+movie_df = movie_df[movie_df.Votes > 500]
+movie_df.reset_index(inplace=True,drop=True)
+
+#Convert movie id column to list
+movie_id_list = movie_df['ID'].tolist()
+len(movie_id_list)
+```
+
+```{python}
+#Movies from 2018 and more than 500 votes API call
+url = "http://private.omdbapi.com/"
+params = {"apikey":api_key_omdb2}
+not_found = []
+
+counter = 0
+start_time = time.time()
+for x in range (len(movie_id_list)):
+
+    movieid = movie_id_list[x]
+    params["i"] = movieid
+    
+    response = requests.get(url,params=params).json()
+    try:
+        # assemble url and make API request
+        movie_df.loc[x,'Title'] = response.get("Title",'')
+        movie_df.loc[x,'Year'] = response.get("Year",'')
+        movie_df.loc[x,'Released'] = response.get("Released",'')
+        movie_df.loc[x,'Runtime'] = response.get("Runtime",'')
+        movie_df.loc[x,'Genre'] = response.get("Genre",'')
+        movie_df.loc[x,'Director'] = response.get("Director",'')
+        movie_df.loc[x,'Writer'] = response.get("Writer",'')
+        movie_df.loc[x,'Actors'] = response.get("Actors",'')
+        movie_df.loc[x,'Plot'] = response.get("Plot",'')
+        movie_df.loc[x,'Country'] = response.get("Country",'')
+        movie_df.loc[x,'Awards'] = response.get("Awards",'')
+        movie_df.loc[x,'RT_Ratings'] = response["Ratings"][1].get("Value",'')
+        movie_df.loc[x,'Metascore'] = response.get("Metascore",'')
+        movie_df.loc[x,'imdbRating'] = response.get("imdbRating",'')
+        movie_df.loc[x,'imdbVotes'] = response.get("imdbVotes",'')
+        movie_df.loc[x,'imdbID'] = response.get("imdbID",'')
+        movie_df.loc[x,'Type'] = response.get("Type",'')
+        movie_df.loc[x,'BoxOffice'] = response.get("BoxOffice",'')
+        movie_df.loc[x,'Production'] = response.get("Production",'')
+        
+    except (KeyError, ValueError) as e:
+        print(f"skipping {movieid}")
+        not_found.append(movieid)
+    except IndexError:
+        movie_df.loc[x,'Title'] = response.get("Title",'')
+        movie_df.loc[x,'Year'] = response.get("Year",'')
+        movie_df.loc[x,'Released'] = response.get("Released",'')
+        movie_df.loc[x,'Runtime'] = response.get("Runtime",'')
+        movie_df.loc[x,'Genre'] = response.get("Genre",'')
+        movie_df.loc[x,'Director'] = response.get("Director",'')
+        movie_df.loc[x,'Writer'] = response.get("Writer",'')
+        movie_df.loc[x,'Actors'] = response.get("Actors",'')
+        movie_df.loc[x,'Plot'] = response.get("Plot",'')
+        movie_df.loc[x,'Country'] = response.get("Country",'')
+        movie_df.loc[x,'Awards'] = response.get("Awards",'')
+        movie_df.loc[x,'Metascore'] = response.get("Metascore",'')
+        movie_df.loc[x,'imdbRating'] = response.get("imdbRating",'')
+        movie_df.loc[x,'imdbVotes'] = response.get("imdbVotes",'')
+        movie_df.loc[x,'imdbID'] = response.get("imdbID",'')
+        movie_df.loc[x,'Type'] = response.get("Type",'')
+        movie_df.loc[x,'BoxOffice'] = response.get("BoxOffice",'')
+        movie_df.loc[x,'Production'] = response.get("Production",'')
+        
+    counter+=1        
+    if counter == 10:
+        break            
+end_time = time.time()
+elapsed = end_time - start_time
+print(f"{elapsed} seconds elapsed, {len(not_found)} record(s) not found")
+#movie_df.to_csv('.\\raw_data\\movies2018_raw.csv', encoding="utf-8", index=False)
+```
+
+# Third API and cleanup
+
+```{python}
+tv_df = pd.read_csv('.\\raw_data\\tvseriesid.csv')
+
+#Filter out series with less than 100 votes
+tv_df['Votes'] = tv_df['Votes'].astype('int64')
+tv_df = tv_df[tv_df.Votes > 100]
+tv_df.reset_index(inplace=True,drop=True)
+
+#Convert movie id column to list
+tv_id_list = tv_df['ID'].tolist()
+len(tv_id_list)
+```
+
+```{python}
+#TV Series 1970-2018 with greater than 100 votes API call
+#RT_Ratings are not found for TV Series, so index error handling is not necessary
+
+not_found = []
+
+start_time = time.time()
+for x in range (len(tv_id_list)):
+
+    tvid = tv_id_list[x]
+    params["i"] = tvid
+    
+    response = requests.get(url,params=params).json()
+    try:
+        # assemble url and make API request
+        tv_df.loc[x,'Title'] = response.get("Title",'')
+        tv_df.loc[x,'Year'] = response.get("Year",'')
+        tv_df.loc[x,'Released'] = response.get("Released",'')
+        tv_df.loc[x,'Runtime'] = response.get("Runtime",'')
+        tv_df.loc[x,'Genre'] = response.get("Genre",'')
+        tv_df.loc[x,'Director'] = response.get("Director",'')
+        tv_df.loc[x,'Writer'] = response.get("Writer",'')
+        tv_df.loc[x,'Actors'] = response.get("Actors",'')
+        tv_df.loc[x,'Plot'] = response.get("Plot",'')
+        tv_df.loc[x,'Country'] = response.get("Country",'')
+        tv_df.loc[x,'Awards'] = response.get("Awards",'')
+        tv_df.loc[x,'Metascore'] = response.get("Metascore",'')
+        tv_df.loc[x,'imdbRating'] = response.get("imdbRating",'')
+        tv_df.loc[x,'imdbVotes'] = response.get("imdbVotes",'')
+        tv_df.loc[x,'imdbID'] = response.get("imdbID",'')
+        tv_df.loc[x,'Type'] = response.get("Type",'')
+        
+    except (KeyError, ValueError,JSONDecodeError) as e:
+        print(f"skipping {tvid}")
+        not_found.append(tvid)
+        
+    counter+=1        
+    if counter == 10:
+        break             
+end_time = time.time()
+elapsed = end_time - start_time
+print(f"{elapsed} seconds elapsed, {len(not_found)} record(s) not found")
+#tv_df.to_csv('.\\raw_data\\tv2018_raw.csv', encoding="utf-8", index=False)
+```
+
+```{python}
+tv_df = pd.read_csv('.\\raw_data\\tv2018_raw.csv')
+
+#Retain only needed column for tv analysis
+tv_ratings = tv_df[['Title','Year','Genre','Country' ,'imdbRating','imdbVotes', 'imdbID']]
+
+#Clean Year
+tv_ratings = tv_ratings[tv_ratings["imdbRating"].notnull()]
+tv_ratings["Year2"] = tv_ratings["Year"].apply(ratings_parse)
+
+#Normalize imdb Ratings
+tv_ratings = tv_ratings[tv_ratings["imdbRating"].notnull()]
+tv_ratings["imdbRating2"] = tv_ratings["imdbRating"].multiply(10)
+
+#Save as tv CSV
+tv_ratings.to_csv('.\\cleaned_data\\tv_series_cleaned.csv', encoding="utf-8", index=False)
+tv_ratings
+```
+
+```{python}
+#Open both movie files so 2018 can be appended to first list movies from first call
+movie2018_file = pd.read_csv('.\\raw_data\\movies2018_raw.csv')
+movie2018_data = pd.DataFrame(movie2018_file)
+
+movie_file = pd.read_csv('.\\cleaned_data\\omdb_movies_cleaned.csv')
+movie_data = pd.DataFrame(movie_file)
+```
+
+```{python}
+#Filter out titles that contain #DUPE#
+movies2018 = movie2018_data[movie2018_data.Title != '#DUPE#']
+#Retain only needed column for movie analysis
+movie2018_data_df = movies2018[['Title','Year','Genre','Country','RT_Ratings','Metascore','imdbRating','imdbVotes','Type','Production']]
+
+movie2018_df = movie2018_data_df[movie2018_data_df["RT_Ratings"].notnull()]
+
+#Normalize Rotten Tomatoes ratings
+movie2018_df["RT_Ratings2"] = movie2018_df["RT_Ratings"].apply(ratings_parse)
+
+#Normalize imdb Ratings
+movie2018_df["imdbRating2"] = movie2018_df["imdbRating"].multiply(10)
+
+#Append to movie dataframe
+allmovies = movie_data.append(movie2018_df)
+
+#Save as movie combined CSV
+allmovies.to_csv('.\\cleaned_data\\movies_w_2018_cleaned.csv', encoding="utf-8", index=False)
+```
+
+# Genre Cleanup (Movies)
+
+```{python}
+movie_file = pd.read_csv('.\\cleaned_data\\movies_w_2018_cleaned.csv')
+movie_data = pd.DataFrame(movie_file)
+
+movie_data.head()
+```
+
+```{python}
+#Deal with multiple genres stores in single series
+genres = movie_data.Genre.str.split(', ',n=10,expand=True)
+genres.head()
+```
+
+```{python}
+#Make list of unique genres
+genre_list = []
+for row in range(17605):
+    for column in range(10):
+        if genres.iloc[row,column] not in genre_list:
+            genre_list.append(genres.iloc[row,column])
+genre_list.pop(5)
+genre_list.pop(-2) 
+print(genre_list)
+```
+
+```{python}
+#Set genres that want to keep for analysis
+#This is based on several experiments and looking at results of different combination
+#It is based on best judment call but has potential to skew analysis
+genres_to_keep = ['Comedy','Fantasy','Drama','Action','Horror','Documentary','Animation']
+len(genre_list)
+```
+
+```{python}
+movie_data_genre = movie_data[movie_data["Genre"].notnull()].reset_index(drop=True)
+
+movie_data_genre.head()
+```
+
+```{python}
+#Find intersection of listed genres and genres to keep
+def intersect(a, b):
+    """ return the intersection of two lists as a comma separated string"""
+    s = list(set(a) & set(b))
+    new = ",".join(s)
+    return new
+
+for row in movie_data_genre.index:
+    intersection = intersect(movie_data_genre.loc[row,"Genre"].split(', '),genres_to_keep)
+    if len(intersection) >= 1:
+        movie_data_genre.at[row,"Genre"] = intersection
+    else:
+        movie_data_genre.at[row,"Genre"] = "No Genre"
+```
+
+```{python}
+#View results
+movie_genre = movie_data_genre[~movie_data_genre.Genre.str.contains("No Genre")].reset_index(drop=True)
+print(movie_genre["Genre"].value_counts())
+```
+
+```{python}
+#Written by Daniel Himmelstein https://stackoverflow.com/users/4651668/daniel-himmelstein
+def tidy_split(df, column, sep='|', keep=False):
+    """
+    Split the values of a column and expand so the new DataFrame has one split
+    value per row. Filters rows where the column is missing.
+
+    Params
+    ------
+    df : pandas.DataFrame
+        dataframe with the column to split and expand
+    column : str
+        the column to split and expand
+    sep : str
+        the string used to split the column's values
+    keep : bool
+        whether to retain the presplit value as it's own row
+
+    Returns
+    -------
+    pandas.DataFrame
+        Returns a dataframe with the same columns as `df`.
+    """
+    indexes = list()
+    new_values = list()
+    df = df.dropna(subset=[column])
+    for i, presplit in enumerate(df[column].astype(str)):
+        values = presplit.split(sep)
+        if keep and len(values) > 1:
+            indexes.append(i)
+            new_values.append(presplit)
+        for value in values:
+            indexes.append(i)
+            new_values.append(value)
+    new_df = df.iloc[indexes, :].copy()
+    new_df[column] = new_values
+    return new_df
+```
+
+```{python}
+#"Explode" the movies that still have multiple genres to multiple rows for analysis
+movies = tidy_split(movie_genre,'Genre',sep=',')
+movies.info()
+```
+
+```{python}
+#movies.to_csv('.\\cleaned_data\\movie_genres_cleaned.csv', encoding="utf-8", index=False)
+```
