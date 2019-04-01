@@ -44,13 +44,16 @@ See applicable data dictionary for more information on the datasets. (located in
 
 ### Limitations of the data
 
+Initially, there was difficulty gathering information.  Most sites required a fee to access data or limited how much data that could be accessed for free, thus restricting our options for data sources.
+
+We discussed how to best analyze movie genres when a single movie could be categorized as 10 different genres.  We went with a method that would counts movies with multiple genres more than once which does have a possibility to skew the data but provides some insight on trends.
+
 The OMDB dataset presented several challenges. The rotten tomatoes ratings were received in an inconsistent format and required a unique solution though in the end it was clean and usable. The Metacritic ratings and box office series were both missing enough values that they were was not usable for analysis.
 
-Genres
+If starting this project again, it is likely that collection of data would have been approached differently. By starting with a pre-curated list from kaggle instead of going straight to the imdb text files the list of movies was not as pure as it could have been. 
 
-Lack of movie count after 2014
+With more time we could have taken a similar approach to the production houses that we took with the genres and reviewed trends by producer. Additionally, with a dataset that included information such as budget and box office it would be possible to determine which genres and even plot points are most profitable.
 
-Box office values mostly missing
         
 ## Analysis/Methodology
 
@@ -69,6 +72,10 @@ To confirm if there were any large changes in genre ratings, the percentage chan
 
 ![genreratingchangebar](Output/genreratingchangebar.png)
 
+To visualize the relationship between several relationships at once (user ratings, critic ratings and genres). The below bubblee graph was created by grouping the data by year and plotting the mean imdb Ratings on the x axis and rotten tomatoes ratings on the y axis.
+
+![ratingbubble](Output/ratingbubble.png)
+
 
 ### Has movie and TV production changed over the same time period?
 
@@ -86,7 +93,7 @@ The genre dataset was grouped by genre and year and divided by total per year to
 
 The percentage change was visualized in a bar graph to check for noticeable shifts.
 
-![genresharechangebar](Output/genresharechangebar.png)
+![genrechangebar](Output/genrechangebar.png)
 
 ### What is the trend for box office revenue over the same time period?
 
@@ -100,5 +107,23 @@ To check that the line was not unduly affected by change in population, the belo
 
 ## Results of Analysis
 
+Although a drop in movie ratings and a rapid growth of online streaming  services such as Netflix in the last decade can be observed, there is not enough evidence to conclude that the growth of streaming service alone is the reason for this decline as there is likely to be a large number of confounding variables. 
+
+We observed that movies ratings have been steadily declining since 2007 while TV series ratings have been consistently increasing over the same period. We further observed that users and critics tend to agree on the quality of movies.
+
+We also noted that the average number of movie tickets sold per person and annual box office revenue have been decreasing since 2003 with a small rebound since 2011.
+
+Finally, we observed the shift in genres popularity over the last 20 years. We noted large increase in Action, Adventure and horror movies produced and large decrease in Dramas and Comedies. Ratings for within the distinct genres remained relatively steady.
+
+
 ## Conclusions
 
+We expected to find a clear decline in movie quality and a correlation between the decline and the rise of other entertainment sources such as Netflix.  However, this is not what we found. Although we saw a drop in movie ratings and a rapid growth of online streaming  services such as Netflix in the last decade, there was not enough evidence to conclude that the growth of streaming service is the reason for this decline.
+
+We observed the shift in genres popularity over the last 20 years. We noted large increase in Action and Adventure movies produced and large decrease in Dramas and Comedies. We concluded that the shift in genres popularity may be the reason for perceived drop in quality of movies.
+
+
+
+```python
+
+```
