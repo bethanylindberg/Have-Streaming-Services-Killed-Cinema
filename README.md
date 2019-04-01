@@ -2,20 +2,8 @@
 
 ## Introduction
 
-Every month there seem to be less movies showing in theatres that are worth the time and effort to view. Genres have shifted to heavy handed drama and popcorn flicks, and overall quality has declined (based on viewer and critic ratings).This project is interested in the changes in aggregate quality of movies available across all platforms and if it is declining like expected, what is influencing the decline. Of particular interest is the rise in streaming services like Netflix and Hulu.
+Every month there seem to be less movies showing in theatres that are worth the time and effort to view. Genres have shifted to popcorn flicks and overall quality has declined (based on viewer ratings).This project is interested in the changes in aggregate quality of movies available across all platforms and if it is declining like expected, what is influencing the decline. Of particular interest is the rise in streaming services like Netflix and Hulu.
 
-### Hypothesis
-
-Primary Hypothesis
-If the rise in streaming services has contributed to a decrease in cinema quality then mean movie ratings before the year 2011 will be higher than the mean movie ratings after the year 2011.
-
-Primary Null Hypothesis
-If the rise in streaming services has not contributed to a decrease in cinema quality then mean movie ratings before the year 2011 will not be higher than the mean movie ratings after the year 2011.
-
-H0 = past mean ratings > current mean ratings
-
-H1 = past mean ratings <= current mean ratings
-   
 ## Description of Data
 
 The bulk of the data used for this project was retrieved from the OMDB API through a series of calls.
@@ -38,6 +26,12 @@ US Population Source: https://www.multpl.com/united-states-population/table/by-y
 For accurate movie releases (North America):
 
 https://www.statista.com/statistics/187122/movie-releases-in-north-america-since-2001/
+
+Alternative Genre Share (for illustrative purposes only): https://www.the-numbers.com/market/genres
+
+Number of original scripted TV series in the United States from 2009 to 2018
+https://www.statista.com/statistics/444870/scripted-primetime-tv-series-number-usa/
+
 
 
 See applicable data dictionary for more information on the datasets. (located in cleaned data folder)
